@@ -500,7 +500,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
     <div id="screen-add-round" class="screen hidden flex-1 flex flex-col bg-app-bg">
         <header class="px-4 py-3.5 flex items-center justify-between border-b border-app-border/50 sticky top-0 bg-app-bg/95 backdrop-blur z-20">
             <div class="flex items-center gap-3">
-                <button type="button" onclick="navigateTo('match')" class="flex items-center gap-1 p-1 text-white hover:text-app-gold">
+                <button type="button" onclick="navigateTo(addRoundReturnScreen)" class="flex items-center gap-1 p-1 text-white hover:text-app-gold">
                     <i data-lucide="arrow-right" class="w-6 h-6"></i><span class="text-sm font-extrabold">رجوع</span>
                 </button>
                 <h2 class="text-lg font-extrabold text-white"><span id="addRoundTitleText">إضافة جولة</span> <span id="addRoundNumberBadge" class="text-app-gold"></span></h2>
@@ -654,14 +654,49 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 <button type="button" onclick="navigateTo('home')" class="flex items-center gap-1 p-1.5 text-white hover:text-app-gold">
                     <i data-lucide="arrow-right" class="w-6 h-6"></i><span class="text-sm font-extrabold">رجوع</span>
                 </button>
-                <h2 class="text-xl font-extrabold text-white">المباريات السابقة</h2>
+                <h2 class="text-xl font-extrabold text-white">سجل المباريات</h2>
             </div>
-            <button type="button" onclick="confirmClearHistory()" id="clearHistoryBtn" class="text-xs text-app-red font-bold hover:underline">
-                مسح السجل
+            <button type="button" onclick="openHistoryFilterModal()" id="historyFilterBtn" class="text-xs font-extrabold text-app-gold bg-app-goldBg border border-app-gold/40 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                <span>تصفية</span>
             </button>
         </header>
 
-        <div class="p-4 space-y-3 flex-1 overflow-y-auto" id="pastMatchesList"></div>
+        <div class="p-4 space-y-2.5">
+            <div class="relative">
+                <input type="text" id="historySearchInput" oninput="renderHistoryScreen()" placeholder="ابحث باسم لاعب أو فريق..." class="w-full bg-app-card border border-app-border focus:border-app-gold outline-none rounded-2xl pr-4 pl-10 py-3 text-sm text-white placeholder-gray-500">
+                <i data-lucide="hash" class="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            </div>
+            <div id="historyActiveFilterNote" class="hidden text-[11px] text-app-gold font-bold"></div>
+            <p class="text-[11px] text-gray-500">اضغط مطوّلاً على مباراة لحذفها.</p>
+        </div>
+
+        <div class="px-4 pb-4 space-y-3 flex-1 overflow-y-auto" id="pastMatchesList"></div>
+
+        <div class="p-4 pt-0">
+            <button type="button" onclick="confirmClearHistory()" id="clearHistoryBtn" class="hidden w-full py-3 rounded-full border border-app-red/40 text-app-red text-sm font-extrabold flex items-center justify-center gap-2">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span>حذف جميع المباريات</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="screen-match-details" class="screen hidden flex-1 flex flex-col bg-app-bg">
+        <header class="px-4 py-4 flex items-center justify-between border-b border-app-border/50 sticky top-0 bg-app-bg z-20">
+            <div class="flex items-center gap-1">
+                <button type="button" onclick="confirmDeleteHistoryMatch(currentHistoryDetailsIndex)" class="p-1.5 text-app-red hover:text-red-400">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                </button>
+                <button type="button" onclick="shareHistoryMatch(currentHistoryDetailsIndex)" class="p-1.5 text-white hover:text-app-gold">
+                    <i data-lucide="share-2" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <h2 class="text-lg font-extrabold text-white">تفاصيل المباراة</h2>
+            <button type="button" onclick="navigateTo('history')" class="flex items-center gap-1 p-1.5 text-white hover:text-app-gold">
+                <i data-lucide="arrow-right" class="w-6 h-6"></i><span class="text-sm font-extrabold">رجوع</span>
+            </button>
+        </header>
+        <div class="p-4 space-y-4 flex-1 overflow-y-auto pb-10" id="matchDetailsContainer"></div>
     </div>
 
     <!-- ===================================================================== -->
@@ -710,6 +745,45 @@ Check your Browserslist config to be sure that your targets are set up correctly
     </div>
 
     <!-- نافذة اختيار الموزع يدوياً -->
+    <div id="historyFilterModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-end justify-center">
+        <div class="bg-app-card border border-app-border rounded-t-3xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl">
+            <div class="flex justify-center pt-3">
+                <div class="w-10 h-1.5 rounded-full bg-app-border"></div>
+            </div>
+            <div class="px-5 pt-3 pb-2 flex items-center justify-between">
+                <h3 class="text-lg font-extrabold text-white">تصفية المباريات</h3>
+                <button type="button" onclick="closeModal('historyFilterModal')" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="px-5 pb-4 space-y-5 overflow-y-auto flex-1 text-sm">
+                <div class="space-y-2">
+                    <div class="text-xs font-extrabold text-app-gold">النوع</div>
+                    <div class="grid grid-cols-3 gap-2" id="filterTypeRow"></div>
+                </div>
+                <div class="space-y-2">
+                    <div class="text-xs font-extrabold text-app-gold">الحالة</div>
+                    <div class="grid grid-cols-3 gap-2" id="filterStatusRow"></div>
+                </div>
+                <div class="space-y-2">
+                    <div class="text-xs font-extrabold text-app-gold">الفترة</div>
+                    <div class="grid grid-cols-3 gap-2" id="filterPeriodRow"></div>
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <input type="date" id="filterFromDate" onchange="onHistoryFilterCustomDate()" class="bg-app-bg border border-app-border rounded-xl px-2.5 py-2 text-xs text-white">
+                        <input type="date" id="filterToDate" onchange="onHistoryFilterCustomDate()" class="bg-app-bg border border-app-border rounded-xl px-2.5 py-2 text-xs text-white">
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="text-xs font-extrabold text-app-gold">اللاعب</div>
+                    <div class="flex flex-wrap gap-2" id="filterPlayerRow"></div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-app-border">
+                <button type="button" onclick="applyHistoryFilters()" id="applyHistoryFilterBtn" class="btn-gold w-full py-3.5 rounded-full font-extrabold text-sm">عرض النتائج</button>
+            </div>
+        </div>
+    </div>
+
     <div id="manualDealerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-5">
         <div class="bg-app-card border border-app-border rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
             <div class="flex items-center justify-between">
@@ -1004,9 +1078,18 @@ Check your Browserslist config to be sure that your targets are set up correctly
             focusedPlayerIdx: null,
             loserMultiplier: 1,
             editingIndex: null,
+            editingHistoryIndex: null,
             editRevealedIndex: null
         };
         let roundExpandState = {};
+        let editingContextMatch = null;
+        let addRoundReturnScreen = 'match';
+        let currentHistoryDetailsIndex = null;
+        let historyFilters = { type: 'all', status: 'all', period: 'all', players: [], from: '', to: '' };
+
+        function ctxMatch() {
+            return editingContextMatch || activeMatch;
+        }
 
         function getRevealedIdxForRoundState() {
             return roundState.editingIndex !== null ? roundState.editRevealedIndex : activeMatch.revealedPlayerIndex;
@@ -1460,18 +1543,11 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 return;
             }
             const totals = calculateMatchTotals();
-            const minVal = Math.min(...totals);
-            // نفس منطق الألوان في شاشة الأرصدة: أخضر = له، أحمر = عليه
-            const isGreen = (i) => {
-                const v = totals[i];
-                if (v < 0) return true;
-                if (activeMatch.mode === 'team') return v === minVal && totals[0] !== totals[1];
-                return v === minVal;
-            };
+            // النطق بناءً على الإشارة الفعلية للرصيد: سالب (-) = له، موجب (+) = عليه
             const say = (label, i) => {
                 const v = totals[i];
                 if (v === 0) return `${label} صفر`;
-                return isGreen(i) ? `${label} له ${Math.abs(v)}` : `${label} عليه ${Math.abs(v)}`;
+                return v < 0 ? `${label} له ${Math.abs(v)}` : `${label} عليه ${Math.abs(v)}`;
             };
             let parts;
             if (activeMatch.mode === 'team') {
@@ -1606,7 +1682,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                     const cardBg = isLeading
                         ? 'bg-[#3A2E14] border-app-gold/50'
                         : 'bg-app-card border-app-border';
-                    const scoreColor = !hasRounds ? 'text-white' : (t.total < 0 ? 'text-app-green' : (isLeading ? 'text-app-green' : 'text-app-red'));
+                    const scoreColor = !hasRounds ? 'text-white' : (t.total < 0 ? 'text-app-green' : 'text-app-red');
 
                     return `
                         <div class="${cardBg} border rounded-3xl p-3.5 flex flex-col justify-between transition">
@@ -1638,7 +1714,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                     const total = totals[idx];
                     const isLeading = hasRounds && total === minVal;
                     const cardBg = isLeading ? 'bg-[#3A2E14] border-app-gold/50' : 'bg-app-card border-app-border';
-                    const scoreColor = !hasRounds ? 'text-white' : (total < 0 ? 'text-app-green' : (isLeading ? 'text-app-green' : 'text-app-red'));
+                    const scoreColor = !hasRounds ? 'text-white' : (total < 0 ? 'text-app-green' : 'text-app-red');
 
                     return `
                         <div class="${cardBg} border rounded-3xl p-3.5 flex flex-col justify-between">
@@ -1653,6 +1729,175 @@ Check your Browserslist config to be sure that your targets are set up correctly
                     `;
                 }).join('');
             }
+        }
+
+        function buildCumulativeAfter(match) {
+            const cumAfter = [];
+            const runP = [0, 0, 0, 0];
+            const runT = [0, 0];
+            match.rounds.forEach(rr => {
+                for (let i = 0; i < 4; i++) runP[i] += (rr.playerTotals ? rr.playerTotals[i] : 0);
+                runT[0] += (rr.teamTotals ? rr.teamTotals[0] : 0);
+                runT[1] += (rr.teamTotals ? rr.teamTotals[1] : 0);
+                cumAfter.push({ player: [...runP], team: [...runT] });
+            });
+            return cumAfter;
+        }
+
+        function buildRoundCardHtml(match, origIdx, cfg) {
+            const r = match.rounds[origIdx];
+            const roundNum = origIdx + 1;
+            const methodLabelsOuter = {
+                normal: 'إنهاء عادي',
+                joker: 'إنهاء مع جوكر',
+                double_joker: 'إنهاء دبل جوكر'
+            };
+            const methodLabels = {
+                normal: 'إنهاء عادي',
+                joker: 'مع جوكر',
+                double_joker: 'دبل جوكر',
+                none: 'انتهت الأحجار'
+            };
+
+            const finisherText = r.finisher === 'none'
+                ? 'انتهت الأحجار (إعادة الجولة)'
+                : `أنهى: ${match.players[r.finisher].name} • ${methodLabels[r.method]}`;
+
+            const dealerText = (r.dealerIndex !== null && r.dealerIndex !== undefined)
+                ? ` • وزّع: ${match.players[r.dealerIndex].name}`
+                : '';
+
+            const multBadge = r.loserMultiplier > 1
+                ? `<span class="inline-block bg-app-goldBg text-app-gold border border-app-gold/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full mr-1">×${r.loserMultiplier}</span>`
+                : '';
+            const editedBadge = r.edited
+                ? `<span class="inline-block bg-sky-950/60 text-sky-300 border border-sky-700/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full mr-1">معدّلة</span>`
+                : '';
+
+            let scoresRowHtml = '';
+            if (match.mode === 'team') {
+                const s0 = r.teamTotals[0];
+                const s1 = r.teamTotals[1];
+                scoresRowHtml = `
+                    <div class="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-app-border/60 text-center">
+                        <div>
+                            <div class="text-[11px] text-gray-400 truncate">${escapeHtml(match.teamNames[0])}</div>
+                            <div class="text-base font-black ${s0 < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${s0 > 0 ? '+' + s0 : s0}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-gray-400 truncate">${escapeHtml(match.teamNames[1])}</div>
+                            <div class="text-base font-black ${s1 < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${s1 > 0 ? '+' + s1 : s1}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                scoresRowHtml = `
+                    <div class="grid grid-cols-4 gap-1 pt-2.5 mt-2.5 border-t border-app-border/60 text-center">
+                        ${match.players.map((p, idx) => {
+                            const sc = r.playerTotals[idx];
+                            return `
+                                <div>
+                                    <div class="text-[10px] text-gray-400 truncate">${escapeHtml(p.name)}</div>
+                                    <div class="text-xs font-black ${sc < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${sc > 0 ? '+' + sc : sc}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            const isExpanded = !!roundExpandState[cfg.expandKey];
+            let detailsHtml = '';
+            if (isExpanded) {
+                const breakdownCards = match.players.map((p, idx) => {
+                    const lines = [];
+                    if (idx === r.finisher) {
+                        lines.push({ label: methodLabelsOuter[r.method] || 'إنهاء', value: (r.winnerBaseBonus !== undefined ? r.winnerBaseBonus : r.playerTotals[idx]) });
+                    } else if (r.finisher !== 'none') {
+                        const winnerTeam = match.players[r.finisher].team;
+                        const isLoserSide = match.mode === 'team' ? (p.team !== winnerTeam) : (idx !== r.finisher);
+                        if (isLoserSide && Array.isArray(r.rawScores)) {
+                            const raw = r.rawScores[idx] || 0;
+                            lines.push({ label: 'أحجار متبقية', value: raw });
+                            if ((r.loserMultiplier || 1) > 1) {
+                                lines.push({ label: 'مضاعفة الأحجار', value: raw * ((r.loserMultiplier || 1) - 1) });
+                            }
+                        }
+                    }
+                    if (idx === r.revealedPlayerIndex) {
+                        lines.push({ label: 'كشف الرقم المشابه', value: (r.revealedBonusAmount !== undefined ? r.revealedBonusAmount : settings.revealedBonus) });
+                    }
+                    const total = r.playerTotals[idx];
+                    const linesHtml = lines.length
+                        ? lines.map(l => `
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="font-black ${l.value < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${l.value > 0 ? '+' + l.value : l.value}</span>
+                                <span class="text-gray-400">${escapeHtml(l.label)}</span>
+                            </div>`).join('')
+                        : `<div class="text-[11px] text-gray-500 text-center">لا توجد تفاصيل محفوظة لهذه الجولة</div>`;
+                    const star = idx === r.finisher ? ' ⭐' : '';
+                    return `
+                        <div class="bg-app-bg/70 border border-app-border/70 rounded-2xl p-2.5 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold text-white">${escapeHtml(p.name)}${star}</span>
+                                <span class="text-sm font-black ${total < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${total > 0 ? '+' + total : total}</span>
+                            </div>
+                            ${linesHtml}
+                        </div>`;
+                }).join('');
+
+                let balancesHtml = '';
+                if (match.mode === 'team' && cfg.cumAfter && cfg.cumAfter[origIdx]) {
+                    const bt = cfg.cumAfter[origIdx].team;
+                    balancesHtml = `
+                        <div class="pt-2 border-t border-app-border/50">
+                            <div class="text-[11px] font-extrabold text-app-gold mb-1.5">الأرصدة بعد الجولة</div>
+                            <div class="grid grid-cols-2 gap-2 text-center">
+                                <div>
+                                    <div class="text-[10px] text-gray-400 truncate">${escapeHtml(match.teamNames[0])}</div>
+                                    <div class="text-sm font-black ${bt[0] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${bt[0] > 0 ? '+' + bt[0] : bt[0]}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-gray-400 truncate">${escapeHtml(match.teamNames[1])}</div>
+                                    <div class="text-sm font-black ${bt[1] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${bt[1] > 0 ? '+' + bt[1] : bt[1]}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+
+                detailsHtml = `
+                    <div class="mt-3 pt-3 border-t border-app-border/50 space-y-2.5">
+                        <div class="grid grid-cols-2 gap-2">${breakdownCards}</div>
+                        ${balancesHtml}
+                        <button type="button" onclick="${cfg.editCallJs}" class="w-full py-2.5 rounded-xl bg-app-card border border-app-gold/40 text-app-gold text-xs font-extrabold flex items-center justify-center gap-1.5">
+                            <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                            <span>تعديل هذه الجولة</span>
+                        </button>
+                    </div>`;
+            }
+
+            return `
+                <div class="bg-app-card border border-app-border rounded-3xl p-4">
+                    <button type="button" onclick="${cfg.toggleCallJs}" class="w-full flex items-start justify-between gap-2 text-right">
+                        <div class="flex items-start gap-1.5">
+                            <i data-lucide="chevron-left" class="w-4 h-4 text-gray-500 mt-1 shrink-0 transition-transform ${isExpanded ? '-rotate-90' : ''}"></i>
+                            <div>
+                                <div class="font-extrabold text-white text-sm flex items-center flex-wrap gap-1">
+                                    <span>الجولة ${roundNum}</span>
+                                    ${multBadge}${editedBadge}
+                                </div>
+                                <div class="text-xs text-gray-300 mt-1">${escapeHtml(finisherText)}${escapeHtml(dealerText)}</div>
+                            </div>
+                        </div>
+                        <div class="text-left shrink-0 text-[11px] text-gray-400">
+                            <div>${r.timestampText || ''}</div>
+                            <div dir="ltr">${formatDuration(r.durationSeconds || 0)}</div>
+                        </div>
+                    </button>
+                    ${scoresRowHtml}
+                    ${detailsHtml}
+                </div>
+            `;
         }
 
         function renderMatchRoundsAndStats() {
@@ -1684,189 +1929,38 @@ Check your Browserslist config to be sure that your targets are set up correctly
             document.getElementById('statMinDuration').textContent = formatDuration(minSec);
             document.getElementById('statMaxDuration').textContent = formatDuration(maxSec);
 
-            // حساب الأرصدة التراكمية بعد كل جولة (للعرض عند التوسع)
-            const cumAfter = [];
-            {
-                const runP = [0, 0, 0, 0];
-                const runT = [0, 0];
-                activeMatch.rounds.forEach(rr => {
-                    for (let i = 0; i < 4; i++) runP[i] += (rr.playerTotals ? rr.playerTotals[i] : 0);
-                    runT[0] += (rr.teamTotals ? rr.teamTotals[0] : 0);
-                    runT[1] += (rr.teamTotals ? rr.teamTotals[1] : 0);
-                    cumAfter.push({ player: [...runP], team: [...runT] });
-                });
-            }
-
-            const methodLabelsOuter = {
-                normal: 'إنهاء عادي',
-                joker: 'إنهاء مع جوكر',
-                double_joker: 'إنهاء دبل جوكر'
-            };
+            const cumAfter = buildCumulativeAfter(activeMatch);
 
             listEl.innerHTML = [...activeMatch.rounds].reverse().map((r, revIdx) => {
                 const origIdx = activeMatch.rounds.length - 1 - revIdx;
-                const roundNum = origIdx + 1;
-                const methodLabels = {
-                    normal: 'إنهاء عادي',
-                    joker: 'مع جوكر',
-                    double_joker: 'دبل جوكر',
-                    none: 'انتهت الأحجار'
-                };
-
-                const finisherText = r.finisher === 'none'
-                    ? 'انتهت الأحجار (إعادة الجولة)'
-                    : `أنهى: ${activeMatch.players[r.finisher].name} • ${methodLabels[r.method]}`;
-
-                const dealerText = (r.dealerIndex !== null && r.dealerIndex !== undefined)
-                    ? ` • وزّع: ${activeMatch.players[r.dealerIndex].name}`
-                    : '';
-
-                const multBadge = r.loserMultiplier > 1
-                    ? `<span class="inline-block bg-app-goldBg text-app-gold border border-app-gold/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full mr-1">×${r.loserMultiplier}</span>`
-                    : '';
-                const editedBadge = r.edited
-                    ? `<span class="inline-block bg-sky-950/60 text-sky-300 border border-sky-700/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full mr-1">معدّلة</span>`
-                    : '';
-
-                let scoresRowHtml = '';
-                if (activeMatch.mode === 'team') {
-                    const s0 = r.teamTotals[0];
-                    const s1 = r.teamTotals[1];
-                    scoresRowHtml = `
-                        <div class="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-app-border/60 text-center">
-                            <div>
-                                <div class="text-[11px] text-gray-400 truncate">${escapeHtml(activeMatch.teamNames[0])}</div>
-                                <div class="text-base font-black ${s0 < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${s0 > 0 ? '+' + s0 : s0}</div>
-                            </div>
-                            <div>
-                                <div class="text-[11px] text-gray-400 truncate">${escapeHtml(activeMatch.teamNames[1])}</div>
-                                <div class="text-base font-black ${s1 < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${s1 > 0 ? '+' + s1 : s1}</div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    scoresRowHtml = `
-                        <div class="grid grid-cols-4 gap-1 pt-2.5 mt-2.5 border-t border-app-border/60 text-center">
-                            ${activeMatch.players.map((p, idx) => {
-                                const sc = r.playerTotals[idx];
-                                return `
-                                    <div>
-                                        <div class="text-[10px] text-gray-400 truncate">${escapeHtml(p.name)}</div>
-                                        <div class="text-xs font-black ${sc < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${sc > 0 ? '+' + sc : sc}</div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    `;
-                }
-
-                const isExpanded = !!roundExpandState[origIdx];
-                let detailsHtml = '';
-                if (isExpanded) {
-                    const breakdownCards = activeMatch.players.map((p, idx) => {
-                        const lines = [];
-                        if (idx === r.finisher) {
-                            lines.push({ label: methodLabelsOuter[r.method] || 'إنهاء', value: (r.winnerBaseBonus !== undefined ? r.winnerBaseBonus : r.playerTotals[idx]) });
-                        } else if (r.finisher !== 'none') {
-                            const winnerTeam = activeMatch.players[r.finisher].team;
-                            const isLoserSide = activeMatch.mode === 'team' ? (p.team !== winnerTeam) : (idx !== r.finisher);
-                            if (isLoserSide && Array.isArray(r.rawScores)) {
-                                const raw = r.rawScores[idx] || 0;
-                                lines.push({ label: 'أحجار متبقية', value: raw });
-                                if ((r.loserMultiplier || 1) > 1) {
-                                    lines.push({ label: 'مضاعفة الأحجار', value: raw * ((r.loserMultiplier || 1) - 1) });
-                                }
-                            }
-                        }
-                        if (idx === r.revealedPlayerIndex) {
-                            lines.push({ label: 'كشف الرقم المشابه', value: (r.revealedBonusAmount !== undefined ? r.revealedBonusAmount : settings.revealedBonus) });
-                        }
-                        const total = r.playerTotals[idx];
-                        const linesHtml = lines.length
-                            ? lines.map(l => `
-                                <div class="flex items-center justify-between text-[11px]">
-                                    <span class="font-black ${l.value < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${l.value > 0 ? '+' + l.value : l.value}</span>
-                                    <span class="text-gray-400">${escapeHtml(l.label)}</span>
-                                </div>`).join('')
-                            : `<div class="text-[11px] text-gray-500 text-center">لا توجد تفاصيل محفوظة لهذه الجولة</div>`;
-                        const star = idx === r.finisher ? ' ⭐' : '';
-                        return `
-                            <div class="bg-app-bg/70 border border-app-border/70 rounded-2xl p-2.5 space-y-1">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-extrabold text-white">${escapeHtml(p.name)}${star}</span>
-                                    <span class="text-sm font-black ${total < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${total > 0 ? '+' + total : total}</span>
-                                </div>
-                                ${linesHtml}
-                            </div>`;
-                    }).join('');
-
-                    let balancesHtml = '';
-                    if (activeMatch.mode === 'team' && cumAfter[origIdx]) {
-                        const bt = cumAfter[origIdx].team;
-                        balancesHtml = `
-                            <div class="pt-2 border-t border-app-border/50">
-                                <div class="text-[11px] font-extrabold text-app-gold mb-1.5">الأرصدة بعد الجولة</div>
-                                <div class="grid grid-cols-2 gap-2 text-center">
-                                    <div>
-                                        <div class="text-[10px] text-gray-400 truncate">${escapeHtml(activeMatch.teamNames[0])}</div>
-                                        <div class="text-sm font-black ${bt[0] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${bt[0] > 0 ? '+' + bt[0] : bt[0]}</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-[10px] text-gray-400 truncate">${escapeHtml(activeMatch.teamNames[1])}</div>
-                                        <div class="text-sm font-black ${bt[1] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${bt[1] > 0 ? '+' + bt[1] : bt[1]}</div>
-                                    </div>
-                                </div>
-                            </div>`;
-                    }
-
-                    detailsHtml = `
-                        <div class="mt-3 pt-3 border-t border-app-border/50 space-y-2.5">
-                            <div class="grid grid-cols-2 gap-2">${breakdownCards}</div>
-                            ${balancesHtml}
-                            <button type="button" onclick="editRound(${origIdx})" class="w-full py-2.5 rounded-xl bg-app-card border border-app-gold/40 text-app-gold text-xs font-extrabold flex items-center justify-center gap-1.5">
-                                <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-                                <span>تعديل هذه الجولة</span>
-                            </button>
-                        </div>`;
-                }
-
-                return `
-                    <div class="bg-app-card border border-app-border rounded-3xl p-4">
-                        <button type="button" onclick="toggleRoundExpand(${origIdx})" class="w-full flex items-start justify-between gap-2 text-right">
-                            <div class="flex items-start gap-1.5">
-                                <i data-lucide="${isExpanded ? 'chevron-left' : 'chevron-left'}" class="w-4 h-4 text-gray-500 mt-1 shrink-0 transition-transform ${isExpanded ? '-rotate-90' : ''}"></i>
-                                <div>
-                                    <div class="font-extrabold text-white text-sm flex items-center flex-wrap gap-1">
-                                        <span>الجولة ${roundNum}</span>
-                                        ${multBadge}${editedBadge}
-                                    </div>
-                                    <div class="text-xs text-gray-300 mt-1">${escapeHtml(finisherText)}${escapeHtml(dealerText)}</div>
-                                </div>
-                            </div>
-                            <div class="text-left shrink-0 text-[11px] text-gray-400">
-                                <div>${r.timestampText || ''}</div>
-                                <div dir="ltr">${formatDuration(r.durationSeconds || 0)}</div>
-                            </div>
-                        </button>
-                        ${scoresRowHtml}
-                        ${detailsHtml}
-                    </div>
-                `;
+                return buildRoundCardHtml(activeMatch, origIdx, {
+                    expandKey: 'live-' + origIdx,
+                    toggleCallJs: `toggleRoundExpand('live-${origIdx}')`,
+                    editCallJs: `editRound(${origIdx})`,
+                    cumAfter: cumAfter
+                });
             }).join('');
 
             if (window.lucide) lucide.createIcons();
         }
 
-        function toggleRoundExpand(idx) {
-            roundExpandState[idx] = !roundExpandState[idx];
-            renderMatchRoundsAndStats();
+        function toggleRoundExpand(key) {
+            roundExpandState[key] = !roundExpandState[key];
+            if (String(key).indexOf('live-') === 0) {
+                renderMatchRoundsAndStats();
+            } else if (currentHistoryDetailsIndex !== null) {
+                renderMatchDetailsScreen(currentHistoryDetailsIndex);
+            }
         }
+
 
         function openAddRoundScreen() {
             if (!activeMatch.roundStartTime) {
                 showToast('اضغط «بدء الجولة» أولاً');
                 return;
             }
+            editingContextMatch = null;
+            addRoundReturnScreen = 'match';
             roundState = {
                 finisher: null,
                 method: 'normal',
@@ -1874,6 +1968,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 focusedPlayerIdx: null,
                 loserMultiplier: 1,
                 editingIndex: null,
+                editingHistoryIndex: null,
                 editRevealedIndex: null
             };
 
@@ -1900,7 +1995,54 @@ Check your Browserslist config to be sure that your targets are set up correctly
             startTimers();
         }
 
+        function editHistoryRound(histIdx, idx) {
+            const m = matchHistory[histIdx];
+            const r = m && m.rounds[idx];
+            if (!r || r.finisher === 'none') return;
+
+            editingContextMatch = m;
+            addRoundReturnScreen = 'match-details';
+
+            roundState = {
+                finisher: r.finisher,
+                method: r.method,
+                rawScores: ['', '', '', ''],
+                focusedPlayerIdx: null,
+                loserMultiplier: r.loserMultiplier || 1,
+                editingIndex: idx,
+                editingHistoryIndex: histIdx,
+                editRevealedIndex: (r.revealedPlayerIndex !== null && r.revealedPlayerIndex !== undefined) ? r.revealedPlayerIndex : null
+            };
+            if (Array.isArray(r.rawScores)) {
+                for (let i = 0; i < 4; i++) {
+                    roundState.rawScores[i] = r.rawScores[i] ? String(r.rawScores[i]) : '';
+                }
+            }
+
+            document.getElementById('addRoundTitleText').textContent = `تعديل الجولة ${idx + 1}`;
+            document.getElementById('saveRoundBtnText').textContent = 'حفظ التعديلات';
+            document.getElementById('addRoundTimerChip').classList.add('hidden');
+            document.getElementById('addRoundNumberBadge').textContent = '';
+            document.getElementById('methodVal_normal').textContent = settings.normalBonus;
+            document.getElementById('methodVal_joker').textContent = settings.jokerBonus;
+            document.getElementById('methodVal_double_joker').textContent = settings.doubleJokerBonus;
+
+            const revNotice2 = document.getElementById('revealedBonusNotice');
+            if (roundState.editRevealedIndex !== null) {
+                revNotice2.classList.remove('hidden');
+                document.getElementById('revealedPlayerNoticeName').textContent =
+                    m.players[roundState.editRevealedIndex].name;
+            } else {
+                revNotice2.classList.add('hidden');
+            }
+
+            renderAddRoundUI();
+            navigateTo('add-round');
+        }
+
         function editRound(idx) {
+            editingContextMatch = null;
+            addRoundReturnScreen = 'match';
             const r = activeMatch.rounds[idx];
             if (!r || r.finisher === 'none') return;
 
@@ -1911,6 +2053,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 focusedPlayerIdx: null,
                 loserMultiplier: r.loserMultiplier || 1,
                 editingIndex: idx,
+                editingHistoryIndex: null,
                 editRevealedIndex: (r.revealedPlayerIndex !== null && r.revealedPlayerIndex !== undefined) ? r.revealedPlayerIndex : null
             };
             if (Array.isArray(r.rawScores)) {
@@ -1953,11 +2096,11 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 roundState.method = 'normal';
                 roundState.loserMultiplier = 1;
 
-                const winnerTeam = activeMatch.players[finisherVal].team;
-                if (activeMatch.mode === 'team') {
-                    roundState.focusedPlayerIdx = activeMatch.players.findIndex(p => p.team !== winnerTeam);
+                const winnerTeam = ctxMatch().players[finisherVal].team;
+                if (ctxMatch().mode === 'team') {
+                    roundState.focusedPlayerIdx = ctxMatch().players.findIndex(p => p.team !== winnerTeam);
                 } else {
-                    roundState.focusedPlayerIdx = activeMatch.players.findIndex((_, idx) => idx !== finisherVal);
+                    roundState.focusedPlayerIdx = ctxMatch().players.findIndex((_, idx) => idx !== finisherVal);
                 }
             }
 
@@ -2014,9 +2157,9 @@ Check your Browserslist config to be sure that your targets are set up correctly
         function getEditableLoserIndices() {
             if (roundState.finisher === null) return [];
             if (roundState.finisher === 'none') return [0, 1, 2, 3];
-            if (activeMatch.mode === 'team') {
-                const winnerTeam = activeMatch.players[roundState.finisher].team;
-                return [0, 1, 2, 3].filter(i => activeMatch.players[i].team !== winnerTeam);
+            if (ctxMatch().mode === 'team') {
+                const winnerTeam = ctxMatch().players[roundState.finisher].team;
+                return [0, 1, 2, 3].filter(i => ctxMatch().players[i].team !== winnerTeam);
             }
             return [0, 1, 2, 3].filter(i => i !== roundState.finisher);
         }
@@ -2030,13 +2173,13 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
         function renderAddRoundUI() {
             const grid = document.getElementById('roundFinisherGrid');
-            grid.innerHTML = activeMatch.players.map((p, idx) => {
+            grid.innerHTML = ctxMatch().players.map((p, idx) => {
                 const isSelected = roundState.finisher === idx;
                 const cardStyle = isSelected
                     ? 'bg-app-gold border-app-gold text-[#111411]'
                     : 'bg-app-card border-app-border text-white hover:border-gray-600';
                 const subTextStyle = isSelected ? 'text-[#2b230d]' : 'text-gray-400';
-                const subLabel = activeMatch.mode === 'team' ? activeMatch.teamNames[p.team] : `لاعب ${idx + 1}`;
+                const subLabel = ctxMatch().mode === 'team' ? ctxMatch().teamNames[p.team] : `لاعب ${idx + 1}`;
 
                 return `
                     <button type="button" onclick="selectRoundFinisher(${idx})"
@@ -2084,7 +2227,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             if (roundState.finisher !== null && roundState.finisher !== 'none') {
                 scoresSec.classList.remove('hidden');
                 numpad.classList.remove('hidden');
-                partnerHint.style.display = (activeMatch.mode === 'team' && roundState.finisher !== 'none') ? 'block' : 'none';
+                partnerHint.style.display = (ctxMatch().mode === 'team' && roundState.finisher !== 'none') ? 'block' : 'none';
                 if (multSection) {
                     // في حالة انتهت الأحجار (none)، نخفي تدبيل الخاسر لأن الجميع صفر
                     multSection.style.display = (settings.enableMultiplier && roundState.finisher !== 'none') ? 'block' : 'none';
@@ -2105,7 +2248,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             let rowsHtml = '';
 
             if (finisherIdx !== null && finisherIdx !== 'none') {
-                const winner = activeMatch.players[finisherIdx];
+                const winner = ctxMatch().players[finisherIdx];
                 let winnerScore = getWinnerBaseBonus();
                 if (getRevealedIdxForRoundState() === finisherIdx) {
                     winnerScore += Number(settings.revealedBonus);
@@ -2118,7 +2261,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                         </div>
                         <div class="text-right flex-1">
                             <div class="font-extrabold text-base text-app-gold">${escapeHtml(winner.name)}</div>
-                            <div class="text-[11px] text-gray-400">${activeMatch.mode === 'team' ? escapeHtml(activeMatch.teamNames[winner.team]) : 'المُنهي'}</div>
+                            <div class="text-[11px] text-gray-400">${ctxMatch().mode === 'team' ? escapeHtml(ctxMatch().teamNames[winner.team]) : 'المُنهي'}</div>
                         </div>
                     </div>
                 `;
@@ -2126,7 +2269,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
             const editableIndices = getEditableLoserIndices();
             editableIndices.forEach(idx => {
-                const p = activeMatch.players[idx];
+                const p = ctxMatch().players[idx];
                 const isFocused = roundState.focusedPlayerIdx === idx;
                 const rawVal = roundState.rawScores[idx];
                 const numericRaw = parseInt(rawVal || '0', 10) || 0;
@@ -2137,7 +2280,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                     ? 'border-2 border-app-gold bg-app-cardLight'
                     : 'border border-app-border bg-app-card';
 
-                const subLabel = activeMatch.mode === 'team' ? activeMatch.teamNames[p.team] : `لاعب ${idx + 1}`;
+                const subLabel = ctxMatch().mode === 'team' ? ctxMatch().teamNames[p.team] : `لاعب ${idx + 1}`;
                 const revTag = (getRevealedIdxForRoundState() === idx)
                     ? `<span class="text-[10px] text-emerald-400 font-bold block">كشف الرقم (${settings.revealedBonus})</span>`
                     : '';;
@@ -2185,7 +2328,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
             if (finisherIdx !== 'none' && roundState.loserMultiplier > 1) {
                 const lines = editableIndices.map(idx => {
-                    const p = activeMatch.players[idx];
+                    const p = ctxMatch().players[idx];
                     const raw = parseInt(roundState.rawScores[idx] || '0', 10) || 0;
                     const finalVal = raw * roundState.loserMultiplier;
                     return `<div class="flex justify-between">
@@ -2247,6 +2390,46 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 playerTotals[0] + playerTotals[1],
                 playerTotals[2] + playerTotals[3]
             ];
+
+            if (roundState.editingHistoryIndex !== null && roundState.editingHistoryIndex !== undefined) {
+                const hIdx = roundState.editingHistoryIndex;
+                const idx = roundState.editingIndex;
+                const m = matchHistory[hIdx];
+                const existing = m.rounds[idx];
+                m.rounds[idx] = {
+                    finisher: roundState.finisher,
+                    method: roundState.method,
+                    loserMultiplier: roundState.loserMultiplier,
+                    revealedPlayerIndex: revIdx,
+                    dealerIndex: existing.dealerIndex,
+                    playerTotals: playerTotals,
+                    teamTotals: teamTotals,
+                    rawScores: rawScoresSnapshot,
+                    winnerBaseBonus: winnerBaseBonus,
+                    revealedBonusAmount: revealedBonusAmount,
+                    durationSeconds: existing.durationSeconds,
+                    timestampText: existing.timestampText,
+                    edited: true
+                };
+                // إعادة حساب النتائج النهائية للمباراة بعد التعديل
+                const newTotals = [0, 0, 0, 0];
+                m.rounds.forEach(rr => {
+                    for (let i = 0; i < 4; i++) newTotals[i] += (rr.playerTotals ? rr.playerTotals[i] : 0);
+                });
+                m.finalTotals = newTotals;
+
+                roundState.editingIndex = null;
+                roundState.editingHistoryIndex = null;
+                roundState.editRevealedIndex = null;
+                editingContextMatch = null;
+                saveToStorage(STORAGE_KEYS.HISTORY, matchHistory);
+                playUiTone(520, 0.08);
+                currentHistoryDetailsIndex = hIdx;
+                renderMatchDetailsScreen(hIdx);
+                navigateTo('match-details');
+                showToast(`تم تحديث الجولة ${idx + 1}`);
+                return;
+            }
 
             if (roundState.editingIndex !== null) {
                 const idx = roundState.editingIndex;
@@ -2528,58 +2711,197 @@ Check your Browserslist config to be sure that your targets are set up correctly
             renderTeamsManagement();
         }
 
+        let longPressTimer = null;
+        let longPressTriggered = false;
+        function startLongPress(cb) {
+            longPressTriggered = false;
+            clearTimeout(longPressTimer);
+            longPressTimer = setTimeout(() => { longPressTriggered = true; cb(); }, 550);
+        }
+        function cancelLongPress() {
+            clearTimeout(longPressTimer);
+        }
+        function handleCardClick(cb) {
+            if (longPressTriggered) { longPressTriggered = false; return; }
+            cb();
+        }
+
+        function getHistoryEntries() {
+            const entries = [];
+            if (activeMatch) entries.push({ kind: 'active', record: activeMatch });
+            matchHistory.forEach((m, idx) => entries.push({ kind: 'history', idx: idx, record: m }));
+            return entries;
+        }
+
+        function entryPassesFilters(entry, query) {
+            const m = entry.record;
+            const f = historyFilters;
+            if (f.type !== 'all' && m.mode !== f.type) return false;
+            const status = entry.kind === 'active' ? 'ongoing' : 'finished';
+            if (f.status !== 'all' && f.status !== status) return false;
+
+            const ts = entry.kind === 'active' ? (m.startTime || Date.now()) : (m.endTime || Date.now());
+            if (f.period !== 'all') {
+                const now = Date.now();
+                const day = 86400000;
+                if (f.period === 'week' && now - ts > 7 * day) return false;
+                if (f.period === 'month' && now - ts > 30 * day) return false;
+                if (f.period === 'year' && now - ts > 365 * day) return false;
+                if (f.period === 'custom') {
+                    if (f.from) { const fromTs = new Date(f.from).getTime(); if (!isNaN(fromTs) && ts < fromTs) return false; }
+                    if (f.to) { const toTs = new Date(f.to).getTime() + day - 1; if (!isNaN(toTs) && ts > toTs) return false; }
+                }
+            }
+
+            if (f.players.length) {
+                const names = m.players.map(p => p.name);
+                if (!f.players.some(pn => names.includes(pn))) return false;
+            }
+
+            if (query) {
+                const hay = [...m.players.map(p => p.name), ...(m.teamNames || [])].join(' ').toLowerCase();
+                if (!hay.includes(query)) return false;
+            }
+            return true;
+        }
+
         function renderHistoryScreen() {
             const list = document.getElementById('pastMatchesList');
             const clearBtn = document.getElementById('clearHistoryBtn');
+            const noteEl = document.getElementById('historyActiveFilterNote');
+            const query = (document.getElementById('historySearchInput').value || '').trim().toLowerCase();
 
-            if (matchHistory.length === 0) {
-                clearBtn.classList.add('hidden');
-                list.innerHTML = `<div class="text-center py-14 text-gray-400 text-sm">لا توجد مباريات سابقة مسجلة حتى الآن.</div>`;
+            const f = historyFilters;
+            const activeCount = (f.type !== 'all' ? 1 : 0) + (f.status !== 'all' ? 1 : 0) + (f.period !== 'all' ? 1 : 0) + (f.players.length ? 1 : 0);
+            if (activeCount > 0) {
+                noteEl.classList.remove('hidden');
+                noteEl.textContent = `مطبّق عليه ${activeCount} تصفية • `;
+                const clearLink = document.createElement('span');
+                clearLink.className = 'underline cursor-pointer';
+                clearLink.textContent = 'إزالة التصفية';
+                clearLink.onclick = () => { historyFilters = { type: 'all', status: 'all', period: 'all', players: [], from: '', to: '' }; renderHistoryScreen(); };
+                noteEl.appendChild(clearLink);
+            } else {
+                noteEl.classList.add('hidden');
+            }
+
+            clearBtn.classList.toggle('hidden', matchHistory.length === 0);
+
+            const entries = getHistoryEntries().filter(e => entryPassesFilters(e, query));
+
+            if (entries.length === 0) {
+                list.innerHTML = `<div class="text-center py-14 text-gray-400 text-sm">لا توجد مباريات مطابقة للبحث/التصفية.</div>`;
                 return;
             }
 
-            clearBtn.classList.remove('hidden');
-            list.innerHTML = matchHistory.map(m => {
-                let resultHtml = '';
-                if (m.mode === 'team') {
-                    const t0 = m.finalTotals[0];
-                    const t1 = m.finalTotals[1];
-                    resultHtml = `
-                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-app-border/60 text-center">
-                            <div class="bg-app-bg/60 rounded-xl p-2">
-                                <div class="text-xs text-gray-300 truncate">${escapeHtml(m.teamNames[0])}</div>
-                                <div class="text-lg font-black ${t0 <= t1 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${t0}</div>
-                            </div>
-                            <div class="bg-app-bg/60 rounded-xl p-2">
-                                <div class="text-xs text-gray-300 truncate">${escapeHtml(m.teamNames[1])}</div>
-                                <div class="text-lg font-black ${t1 <= t0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${t1}</div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    const minS = Math.min(...m.finalTotals);
-                    resultHtml = `
-                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-app-border/60">
-                            ${m.players.map((p, idx) => `
-                                <div class="flex justify-between items-center bg-app-bg/60 px-3 py-1.5 rounded-xl text-xs">
-                                    <span class="text-gray-200 font-bold truncate">${escapeHtml(p.name)}</span>
-                                    <span class="font-black ${m.finalTotals[idx] === minS ? 'text-app-green' : 'text-app-red'}" dir="ltr">${m.finalTotals[idx]}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                }
+            list.innerHTML = entries.map(entry => {
+                const m = entry.record;
+                const isActive = entry.kind === 'active';
+                const typeLabel = m.mode === 'team' ? 'زوجي' : 'فردي';
+                const namesLine = m.players.map(p => p.name).join(' - ');
+                const pairsLine = (m.mode === 'team' && m.teamNames)
+                    ? `<div class="text-xs text-gray-400 mt-0.5 truncate">${escapeHtml(m.players[0].name)}+${escapeHtml(m.players[1].name)} × ${escapeHtml(m.players[2].name)}+${escapeHtml(m.players[3].name)}</div>`
+                    : '';
+
+                const durations = m.rounds.map(r => r.durationSeconds || 0);
+                const avgSec = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+                const totalDur = isActive
+                    ? Math.max(0, Math.floor((Date.now() - (m.startTime || Date.now())) / 1000))
+                    : (m.totalDurationSeconds || 0);
+                const roundsCount = m.rounds.length;
+                const roundsLabel = roundsCount === 0 ? 'لا جولات بعد' : (roundsCount === 1 ? 'جولة واحدة' : `${roundsCount} جولات`);
+
+                const statusBadge = isActive
+                    ? `<span class="text-[10px] font-extrabold text-emerald-300 bg-emerald-950/50 border border-emerald-700/40 px-2 py-0.5 rounded-full">جارية الآن</span>`
+                    : `<span>${m.dateText || ''}</span>`;
+
+                const clickAttr = isActive
+                    ? `onclick="handleCardClick(() => { renderActiveMatchScreen(); navigateTo('match'); })"`
+                    : `onclick="handleCardClick(() => openMatchDetails(${entry.idx}))" onpointerdown="startLongPress(() => confirmDeleteHistoryMatch(${entry.idx}))" onpointerup="cancelLongPress()" onpointerleave="cancelLongPress()"`;
 
                 return `
-                    <div class="bg-app-card border border-app-border rounded-3xl p-4">
+                    <div class="bg-app-card border border-app-border rounded-3xl p-4 cursor-pointer select-none" ${clickAttr}>
                         <div class="flex items-center justify-between text-xs text-gray-400">
-                            <span class="font-extrabold text-app-gold">${m.mode === 'team' ? 'مباراة زوجي' : 'مباراة فردي'} • ${m.rounds.length} جولات</span>
-                            <span>${m.dateText || ''}</span>
+                            <span class="font-extrabold text-app-gold bg-app-goldBg border border-app-gold/30 px-2 py-0.5 rounded-full text-[10px]">${typeLabel}</span>
+                            ${statusBadge}
                         </div>
-                        ${resultHtml}
+                        <div class="text-sm text-gray-100 font-bold truncate mt-2">${escapeHtml(namesLine)}</div>
+                        ${pairsLine}
+                        <div class="flex items-center justify-between mt-3 pt-3 border-t border-app-border/60 text-[11px] text-gray-400">
+                            <span>${roundsLabel} • مدة المباراة: ${formatDuration(totalDur)}</span>
+                        </div>
+                        ${roundsCount ? `<div class="text-[11px] text-gray-500 mt-1">متوسط وقت الجولة: ${formatDuration(avgSec)}</div>` : ''}
                     </div>
                 `;
             }).join('');
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function openHistoryFilterModal() {
+            const typeRow = document.getElementById('filterTypeRow');
+            const statusRow = document.getElementById('filterStatusRow');
+            const periodRow = document.getElementById('filterPeriodRow');
+            const playerRow = document.getElementById('filterPlayerRow');
+
+            const typeOpts = [['all', 'الكل'], ['solo', 'فردي'], ['team', 'زوجي']];
+            const statusOpts = [['all', 'الكل'], ['ongoing', 'جارية'], ['finished', 'منتهية']];
+            const periodOpts = [['all', 'الكل'], ['week', 'هذا الأسبوع'], ['month', 'هذا الشهر'], ['year', 'هذه السنة'], ['custom', 'من... إلى...']];
+
+            const chip = (val, label, group) => {
+                const active = historyFilters[group] === val;
+                return `<button type="button" onclick="setHistoryFilter('${group}','${val}')" class="py-2 px-2 rounded-full border text-xs font-extrabold text-center transition ${active ? 'bg-app-gold border-app-gold text-[#111411]' : 'bg-app-bg border-app-border text-gray-300'}">${label}</button>`;
+            };
+
+            typeRow.innerHTML = typeOpts.map(([v, l]) => chip(v, l, 'type')).join('');
+            statusRow.innerHTML = statusOpts.map(([v, l]) => chip(v, l, 'status')).join('');
+            periodRow.innerHTML = periodOpts.map(([v, l]) => chip(v, l, 'period')).join('');
+
+            document.getElementById('filterFromDate').value = historyFilters.from || '';
+            document.getElementById('filterToDate').value = historyFilters.to || '';
+
+            const namesSet = Array.from(new Set(savedPlayers.map(p => p.name)));
+            playerRow.innerHTML = namesSet.map(name => {
+                const active = historyFilters.players.includes(name);
+                return `<button type="button" onclick="toggleHistoryFilterPlayer('${name.replace(/'/g, "\\'")}')" class="py-1.5 px-3 rounded-full border text-xs font-extrabold transition ${active ? 'bg-app-gold border-app-gold text-[#111411]' : 'bg-app-bg border-app-border text-gray-300'}">${escapeHtml(name)}</button>`;
+            }).join('') || `<span class="text-xs text-gray-500">لا يوجد لاعبون محفوظون</span>`;
+
+            updateHistoryFilterApplyBtn();
+            const modal = document.getElementById('historyFilterModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function setHistoryFilter(group, val) {
+            historyFilters[group] = val;
+            openHistoryFilterModal();
+        }
+
+        function toggleHistoryFilterPlayer(name) {
+            const i = historyFilters.players.indexOf(name);
+            if (i === -1) historyFilters.players.push(name);
+            else historyFilters.players.splice(i, 1);
+            openHistoryFilterModal();
+        }
+
+        function onHistoryFilterCustomDate() {
+            historyFilters.from = document.getElementById('filterFromDate').value;
+            historyFilters.to = document.getElementById('filterToDate').value;
+            historyFilters.period = 'custom';
+            updateHistoryFilterApplyBtn();
+        }
+
+        function updateHistoryFilterApplyBtn() {
+            const query = (document.getElementById('historySearchInput').value || '').trim().toLowerCase();
+            const count = getHistoryEntries().filter(e => entryPassesFilters(e, query)).length;
+            document.getElementById('applyHistoryFilterBtn').textContent =
+                count === 0 ? 'لا توجد نتائج' : (count === 1 ? 'عرض مباراة واحدة' : `عرض ${count} مباريات`);
+        }
+
+        function applyHistoryFilters() {
+            closeModal('historyFilterModal');
+            renderHistoryScreen();
         }
 
         function confirmClearHistory() {
@@ -2590,6 +2912,169 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 showToast('تم مسح سجل المباريات');
             });
         }
+
+        function confirmDeleteHistoryMatch(idx) {
+            if (idx === null || idx === undefined || !matchHistory[idx]) return;
+            openConfirmDialog('حذف المباراة', 'هل تريد حذف هذه المباراة نهائياً من السجل؟', () => {
+                matchHistory.splice(idx, 1);
+                saveToStorage(STORAGE_KEYS.HISTORY, matchHistory);
+                showToast('تم حذف المباراة');
+                navigateTo('history');
+            });
+        }
+
+        function shareHistoryMatch(idx) {
+            const m = matchHistory[idx];
+            if (!m) return;
+            let text = `🎲 نتيجة مباراة أوووكي (الجولات: ${m.rounds.length})\n\n`;
+            if (m.mode === 'team') {
+                text += `• ${m.teamNames[0]}: ${m.finalTotals[0]}\n`;
+                text += `• ${m.teamNames[1]}: ${m.finalTotals[1]}\n`;
+            } else {
+                m.players.forEach((p, i) => { text += `• ${p.name}: ${m.finalTotals[i]}\n`; });
+            }
+            if (navigator.share) {
+                navigator.share({ title: 'حاسبة الأوووكي', text: text }).catch(() => {});
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+                showToast('تم نسخ ملخص النتيجة للحافظة');
+            }
+        }
+
+        function openMatchDetails(idx) {
+            if (!matchHistory[idx]) return;
+            currentHistoryDetailsIndex = idx;
+            renderMatchDetailsScreen(idx);
+            navigateTo('match-details');
+        }
+
+        function renderMatchDetailsScreen(idx) {
+            const m = matchHistory[idx];
+            const container = document.getElementById('matchDetailsContainer');
+            if (!m) { container.innerHTML = ''; return; }
+
+            const totals = m.finalTotals;
+            const minVal = Math.min(...totals);
+
+            let scoreCardsHtml = '';
+            if (m.mode === 'team') {
+                const teams = [
+                    { label: m.teamNames[0], total: totals[0], pA: m.players[0], pB: m.players[1] },
+                    { label: m.teamNames[1], total: totals[1], pA: m.players[2], pB: m.players[3] }
+                ];
+                scoreCardsHtml = `<div class="grid grid-cols-2 gap-3">` + teams.map((t, i) => {
+                    const rank = t.total <= totals[1 - i] ? '1' : '2';
+                    const scoreColor = t.total < 0 ? 'text-app-green' : 'text-app-red';
+                    return `
+                        <div class="bg-app-card border border-app-border rounded-3xl p-3.5 flex flex-col justify-between">
+                            <div class="flex items-center justify-between gap-1">
+                                <div class="flex items-center -space-x-2 space-x-reverse">
+                                    <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ring-2 ring-app-card" style="background-color: ${t.pA.color}">${getInitials(t.pA.name)}</span>
+                                    <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ring-2 ring-app-card" style="background-color: ${t.pB.color}">${getInitials(t.pB.name)}</span>
+                                </div>
+                                <span class="w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${rank === '1' ? 'bg-app-gold text-black' : 'bg-app-cardLight text-gray-300'}">${rank}</span>
+                            </div>
+                            <div class="mt-2.5 text-xs text-gray-300 font-bold truncate" title="${escapeHtml(t.label)}">${escapeHtml(t.label)}</div>
+                            <div class="mt-2 text-left text-3xl font-black tracking-tight ${scoreColor}" dir="ltr">${t.total}</div>
+                        </div>`;
+                }).join('') + `</div>`;
+            } else {
+                scoreCardsHtml = `<div class="grid grid-cols-2 gap-3">` + m.players.map((p, idx2) => {
+                    const total = totals[idx2];
+                    const scoreColor = total < 0 ? 'text-app-green' : 'text-app-red';
+                    return `
+                        <div class="bg-app-card border border-app-border rounded-3xl p-3.5 flex flex-col justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-black text-white" style="background-color: ${p.color}">${getInitials(p.name)}</span>
+                                <span class="text-xs font-extrabold text-white truncate">${escapeHtml(p.name)}</span>
+                            </div>
+                            <div class="mt-2 text-left text-2xl font-black ${scoreColor}" dir="ltr">${total}</div>
+                        </div>`;
+                }).join('') + `</div>`;
+            }
+
+            let statsHtml = '';
+            if (m.rounds.length > 0) {
+                const durations = m.rounds.map(r => r.durationSeconds || 0);
+                const avgSec = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+                const minSec = Math.min(...durations);
+                const maxSec = Math.max(...durations);
+                statsHtml = `
+                    <div class="bg-app-card border border-app-border rounded-3xl p-4 space-y-3">
+                        <h3 class="text-sm font-extrabold text-app-gold">سجل الجولات</h3>
+                        <div class="grid grid-cols-2 gap-2.5 text-center">
+                            <div class="bg-app-bg/70 rounded-2xl py-2.5"><div class="text-sm font-black text-white" dir="ltr">${formatDuration(avgSec)}</div><div class="text-[11px] text-gray-400 mt-0.5">متوسط وقت الجولة</div></div>
+                            <div class="bg-app-bg/70 rounded-2xl py-2.5"><div class="text-sm font-black text-white">${m.rounds.length}</div><div class="text-[11px] text-gray-400 mt-0.5">عدد الجولات</div></div>
+                            <div class="bg-app-bg/70 rounded-2xl py-2.5"><div class="text-sm font-black text-white" dir="ltr">${formatDuration(maxSec)}</div><div class="text-[11px] text-gray-400 mt-0.5">أطول جولة</div></div>
+                            <div class="bg-app-bg/70 rounded-2xl py-2.5"><div class="text-sm font-black text-white" dir="ltr">${formatDuration(minSec)}</div><div class="text-[11px] text-gray-400 mt-0.5">أقصر جولة</div></div>
+                        </div>
+                    </div>`;
+            }
+
+            const cumAfter = buildCumulativeAfter(m);
+            const roundsHtml = [...m.rounds].reverse().map((r, revIdx) => {
+                const origIdx = m.rounds.length - 1 - revIdx;
+                return buildRoundCardHtml(m, origIdx, {
+                    expandKey: 'h' + idx + '-' + origIdx,
+                    toggleCallJs: `toggleRoundExpand('h${idx}-${origIdx}')`,
+                    editCallJs: `editHistoryRound(${idx}, ${origIdx})`,
+                    cumAfter: cumAfter
+                });
+            }).join('');
+
+            container.innerHTML = `
+                ${scoreCardsHtml}
+                ${statsHtml}
+                <div class="space-y-3">
+                    <h3 class="text-sm font-extrabold text-app-gold">الجولات</h3>
+                    ${roundsHtml || `<div class="text-center py-8 text-gray-400 text-sm">لا توجد جولات مسجّلة</div>`}
+                </div>
+                <button type="button" onclick="shareHistoryMatch(${idx})" class="w-full py-3 rounded-full border border-app-border text-gray-200 text-sm font-extrabold flex items-center justify-center gap-2">
+                    <i data-lucide="share-2" class="w-4 h-4"></i>
+                    <span>مشاركة النتيجة</span>
+                </button>
+                <button type="button" onclick="rematchFromHistory(${idx})" class="btn-gold w-full py-3.5 rounded-full font-extrabold text-sm flex items-center justify-center gap-2">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span>مباراة جديدة بنفس اللاعبين</span>
+                </button>
+            `;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function rematchFromHistory(idx) {
+            const m = matchHistory[idx];
+            if (!m) return;
+            if (activeMatch) {
+                openConfirmDialog('يوجد مباراة جارية', 'لديك مباراة جارية حالياً. المتابعة ستستبدلها بمباراة جديدة بنفس اللاعبين. هل تريد المتابعة؟', () => startRematch(m));
+            } else {
+                startRematch(m);
+            }
+        }
+
+        function startRematch(m) {
+            activeMatch = {
+                id: 'match_' + Date.now(),
+                mode: m.mode,
+                players: m.players.map(p => ({ ...p })),
+                teamNames: m.teamNames ? [...m.teamNames] : ['الفريق الأول', 'الفريق الثاني'],
+                startTime: null,
+                roundStartTime: null,
+                dealerIndex: null,
+                revealedPlayerIndex: null,
+                rounds: []
+            };
+            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            stopTimers();
+            renderActiveMatchScreen();
+            navigateTo('match');
+            showToast('بدأت مباراة جديدة بنفس اللاعبين');
+        }
+
 
         function renderGlobalStatsScreen() {
             const container = document.getElementById('globalStatsContainer');
