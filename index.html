@@ -699,6 +699,24 @@ Check your Browserslist config to be sure that your targets are set up correctly
         <div class="p-4 space-y-4 flex-1 overflow-y-auto pb-10" id="matchDetailsContainer"></div>
     </div>
 
+    <div id="screen-match-summary" class="screen hidden flex-1 flex flex-col bg-app-bg">
+        <header class="px-4 py-4 flex items-center justify-between border-b border-app-border/50 sticky top-0 bg-app-bg z-20">
+            <div class="flex items-center gap-1">
+                <button type="button" onclick="confirmDeleteHistoryMatch(currentHistoryDetailsIndex)" class="p-1.5 text-app-red hover:text-red-400">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                </button>
+                <button type="button" onclick="shareHistoryMatch(currentHistoryDetailsIndex)" class="p-1.5 text-white hover:text-app-gold">
+                    <i data-lucide="share-2" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <h2 class="text-lg font-extrabold text-white">ملخص المباراة</h2>
+            <button type="button" onclick="navigateTo('history')" class="flex items-center gap-1 p-1.5 text-white hover:text-app-gold">
+                <i data-lucide="arrow-right" class="w-6 h-6"></i><span class="text-sm font-extrabold">رجوع</span>
+            </button>
+        </header>
+        <div class="p-4 space-y-4 flex-1 overflow-y-auto pb-10" id="matchSummaryContainer"></div>
+    </div>
+
     <!-- ===================================================================== -->
     <!-- 8. شاشة الإحصائيات (STATISTICS SCREEN) -->
     <!-- ===================================================================== -->
@@ -1086,6 +1104,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
         let addRoundReturnScreen = 'match';
         let currentHistoryDetailsIndex = null;
         let historyFilters = { type: 'all', status: 'all', period: 'all', players: [], from: '', to: '' };
+        let summarySelectedRound = {};
 
         function ctxMatch() {
             return editingContextMatch || activeMatch;
@@ -2460,7 +2479,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
             const now = Date.now();
             const durationSeconds = Math.max(1, Math.floor((now - (activeMatch.roundStartTime || now)) / 1000));
-            const timeStr = new Date(now).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+            const timeStr = new Date(now).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
 
             activeMatch.rounds.push({
                 finisher: roundState.finisher,
@@ -2539,7 +2558,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 endTime: now,
                 totalDurationSeconds: totalDuration,
                 finalTotals: totals,
-                dateText: new Date(now).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })
+                dateText: new Date(now).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' })
             };
 
             if (activeMatch.rounds.length > 0) {
@@ -2550,8 +2569,14 @@ Check your Browserslist config to be sure that your targets are set up correctly
             activeMatch = null;
             localStorage.removeItem(STORAGE_KEYS.ACTIVE_MATCH);
             stopTimers();
-            navigateTo('home');
-            showToast('تم إنهاء المباراة وحفظها في السجل');
+
+            if (finishedRecord.rounds.length > 0) {
+                openMatchSummary(0);
+                showToast('تم إنهاء المباراة وحفظها في السجل');
+            } else {
+                navigateTo('home');
+                showToast('تم إنهاء المباراة');
+            }
         }
 
         function confirmDeleteLastRound() {
@@ -3073,6 +3098,190 @@ Check your Browserslist config to be sure that your targets are set up correctly
             renderActiveMatchScreen();
             navigateTo('match');
             showToast('بدأت مباراة جديدة بنفس اللاعبين');
+        }
+
+        function formatFullDateTime(ts) {
+            const d = new Date(ts);
+            const datePart = d.toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' });
+            const timePart = d.toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
+            return `${datePart} - ${timePart}`;
+        }
+
+        function openMatchSummary(idx) {
+            if (!matchHistory[idx]) return;
+            currentHistoryDetailsIndex = idx;
+            renderMatchSummaryScreen(idx);
+            navigateTo('match-summary');
+        }
+
+        function selectSummaryRound(histIdx, roundIdx) {
+            summarySelectedRound[histIdx] = roundIdx;
+            renderMatchSummaryScreen(histIdx);
+        }
+
+        function buildBalanceChartSvg(m, cum, histIdx) {
+            const n = m.rounds.length;
+            if (n === 0) return '';
+            const w = 320, h = 120, padL = 8, padR = 8, padT = 10, padB = 10;
+
+            const series = m.mode === 'team'
+                ? [
+                    { name: m.teamNames[0], color: '#60A5FA', vals: [0, ...cum.map(c => c.team[0])] },
+                    { name: m.teamNames[1], color: '#FBBF24', vals: [0, ...cum.map(c => c.team[1])] }
+                  ]
+                : m.players.map((p, i) => ({ name: p.name, color: p.color, vals: [0, ...cum.map(c => c.player[i])] }));
+
+            const allVals = series.reduce((acc, s) => acc.concat(s.vals), [0]);
+            let minV = Math.min(...allVals);
+            let maxV = Math.max(...allVals);
+            if (minV === maxV) { minV -= 10; maxV += 10; }
+
+            const xStep = (w - padL - padR) / n;
+            const xScale = i => padL + i * xStep;
+            const yScale = v => padT + (h - padT - padB) - ((v - minV) / (maxV - minV)) * (h - padT - padB);
+            const zeroY = yScale(0);
+
+            const selectedIdx = (summarySelectedRound[histIdx] !== undefined) ? summarySelectedRound[histIdx] : (n - 1);
+
+            const linesHtml = series.map(s => {
+                const pts = s.vals.map((v, i) => `${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`).join(' ');
+                const dots = s.vals.slice(1).map((v, i) => {
+                    const isSel = i === selectedIdx;
+                    return `<circle cx="${xScale(i + 1).toFixed(1)}" cy="${yScale(v).toFixed(1)}" r="${isSel ? 6 : 4}" fill="${s.color}" stroke="#15181a" stroke-width="${isSel ? 2.5 : 1.5}" style="cursor:pointer" onclick="selectSummaryRound(${histIdx}, ${i})"/>`;
+                }).join('');
+                return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+            }).join('');
+
+            const legendHtml = series.map(s => `
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full" style="background-color:${s.color}"></span>
+                    <span class="text-[10px] text-gray-300 truncate max-w-[90px]">${escapeHtml(s.name)}</span>
+                </div>`).join('');
+
+            return `
+                <svg viewBox="0 0 ${w} ${h}" class="w-full h-28" preserveAspectRatio="none">
+                    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w - padR}" y2="${zeroY.toFixed(1)}" stroke="#2C332D" stroke-width="1" stroke-dasharray="3,3"/>
+                    ${linesHtml}
+                </svg>
+                <div class="flex items-center justify-center gap-4 mt-1">${legendHtml}</div>
+            `;
+        }
+
+        function renderMatchSummaryScreen(idx) {
+            const m = matchHistory[idx];
+            const container = document.getElementById('matchSummaryContainer');
+            if (!m) { container.innerHTML = ''; return; }
+
+            const typeLabel = m.mode === 'team' ? 'زوجي' : 'فردي';
+            const infoHtml = `
+                <div class="bg-app-card border border-app-border rounded-3xl p-4 space-y-3">
+                    <div class="text-lg font-extrabold text-white">${m.dateText || ''}</div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center justify-between"><span class="text-gray-400">النظام</span><span class="font-bold text-white">${typeLabel} • منتهية</span></div>
+                        <div class="flex items-center justify-between"><span class="text-gray-400">عدد الجولات</span><span class="font-bold text-white">${m.rounds.length}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-gray-400">وقت البداية</span><span class="font-bold text-white">${m.startTime ? formatFullDateTime(m.startTime) : '—'}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-gray-400">وقت النهاية</span><span class="font-bold text-white">${m.endTime ? formatFullDateTime(m.endTime) : '—'}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-gray-400">مدة المباراة</span><span class="font-bold text-white" dir="ltr">${formatDuration(m.totalDurationSeconds || 0)}</span></div>
+                    </div>
+                </div>
+            `;
+
+            const totals = m.finalTotals;
+            let winLabel, winVal, isTie;
+            if (m.mode === 'team') {
+                isTie = totals[0] === totals[1];
+                const winIdx = totals[0] <= totals[1] ? 0 : 1;
+                winLabel = m.teamNames[winIdx];
+                winVal = totals[winIdx];
+            } else {
+                const minV = Math.min(...totals);
+                isTie = totals.filter(v => v === minV).length > 1;
+                const winIdx = totals.indexOf(minV);
+                winLabel = m.players[winIdx].name;
+                winVal = minV;
+            }
+            const winnerHtml = `
+                <div class="bg-[#3A2E14] border border-app-gold/50 rounded-3xl p-4 flex items-center justify-between">
+                    <div class="text-3xl font-black text-app-green" dir="ltr">${winVal}</div>
+                    <div class="text-right">
+                        <div class="text-xs text-gray-300 font-bold">${isTie ? 'تعادل' : 'الفائز'}</div>
+                        <div class="text-lg font-extrabold text-white flex items-center gap-1.5 justify-end">
+                            <span>${escapeHtml(winLabel)}</span>
+                            ${isTie ? '' : '<span class="text-app-gold">★</span>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const cumAfter = buildCumulativeAfter(m);
+            const selectedIdx = (summarySelectedRound[idx] !== undefined) ? summarySelectedRound[idx] : (m.rounds.length - 1);
+            const selR = m.rounds[selectedIdx];
+
+            const methodLabels = { normal: 'إنهاء عادي', joker: 'مع جوكر', double_joker: 'دبل جوكر', none: 'انتهت الأحجار' };
+            let selRowHtml = '';
+            if (selR) {
+                const finisherText = selR.finisher === 'none'
+                    ? 'انتهت الأحجار (إعادة الجولة)'
+                    : `أنهى: ${m.players[selR.finisher].name} • ${methodLabels[selR.method]} • وزّع: ${(selR.dealerIndex !== null && selR.dealerIndex !== undefined) ? m.players[selR.dealerIndex].name : '—'}`;
+                const scoresLine = m.mode === 'team'
+                    ? `
+                        <div class="flex items-center justify-between text-sm pt-1">
+                            <div><span class="font-black ${selR.teamTotals[1] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${selR.teamTotals[1] > 0 ? '+' + selR.teamTotals[1] : selR.teamTotals[1]}</span> <span class="text-gray-400 text-xs">${escapeHtml(m.teamNames[1])}</span></div>
+                            <div><span class="text-gray-400 text-xs">${escapeHtml(m.teamNames[0])}</span> <span class="font-black ${selR.teamTotals[0] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${selR.teamTotals[0] > 0 ? '+' + selR.teamTotals[0] : selR.teamTotals[0]}</span></div>
+                        </div>`
+                    : `
+                        <div class="grid grid-cols-4 gap-1 pt-1 text-center">
+                            ${m.players.map((p, i) => `<div><div class="text-[10px] text-gray-400 truncate">${escapeHtml(p.name)}</div><div class="text-xs font-black ${selR.playerTotals[i] < 0 ? 'text-app-green' : 'text-app-red'}" dir="ltr">${selR.playerTotals[i] > 0 ? '+' + selR.playerTotals[i] : selR.playerTotals[i]}</div></div>`).join('')}
+                        </div>`;
+                selRowHtml = `
+                    <div class="bg-app-bg/70 border border-app-border/60 rounded-2xl p-3 space-y-1.5 mt-2">
+                        <div class="flex items-center justify-between text-[11px] text-gray-400">
+                            <span>مدة الجولة: ${formatDuration(selR.durationSeconds || 0)}</span>
+                            <span class="font-extrabold text-app-gold">الجولة ${selectedIdx + 1}</span>
+                        </div>
+                        <div class="text-xs text-gray-200">${escapeHtml(finisherText)}</div>
+                        ${scoresLine}
+                    </div>`;
+            }
+
+            const chartHtml = buildBalanceChartSvg(m, cumAfter, idx);
+            const evolutionHtml = `
+                <div class="bg-app-card border border-app-border rounded-3xl p-4">
+                    <h3 class="text-sm font-extrabold text-app-gold">تطور الأرصدة</h3>
+                    <p class="text-[10px] text-gray-500 mt-0.5">الرصيد بعد كل جولة • الأقل أفضل ↓ • المس الرسم لعرض جولة</p>
+                    <div class="mt-2">${chartHtml}</div>
+                    ${selRowHtml}
+                </div>
+            `;
+
+            const roundsHtml = [...m.rounds].reverse().map((r, revIdx) => {
+                const origIdx = m.rounds.length - 1 - revIdx;
+                return buildRoundCardHtml(m, origIdx, {
+                    expandKey: 'h' + idx + '-' + origIdx,
+                    toggleCallJs: `toggleRoundExpand('h${idx}-${origIdx}')`,
+                    editCallJs: `editHistoryRound(${idx}, ${origIdx})`,
+                    cumAfter: cumAfter
+                });
+            }).join('');
+
+            container.innerHTML = `
+                ${infoHtml}
+                ${winnerHtml}
+                ${evolutionHtml}
+                <div class="space-y-3">${roundsHtml}</div>
+                <button type="button" onclick="shareHistoryMatch(${idx})" class="w-full py-3 rounded-full border border-app-border text-gray-200 text-sm font-extrabold flex items-center justify-center gap-2">
+                    <i data-lucide="share-2" class="w-4 h-4"></i>
+                    <span>مشاركة النتيجة</span>
+                </button>
+                <button type="button" onclick="rematchFromHistory(${idx})" class="btn-gold w-full py-3.5 rounded-full font-extrabold text-sm flex items-center justify-center gap-2">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    <span>مباراة جديدة بنفس اللاعبين</span>
+                </button>
+                <button type="button" onclick="navigateTo('home')" class="w-full py-3 rounded-full border border-app-border text-gray-400 text-sm font-bold">
+                    العودة إلى الرئيسية
+                </button>
+            `;
+            if (window.lucide) lucide.createIcons();
         }
 
 
