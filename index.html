@@ -99,6 +99,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.19.0/firebase-app-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.19.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.19.0/firebase-auth-compat.min.js"></script>
     <script>
         // أيقونات مدمجة (لا تحتاج إنترنت)
         (function () {
@@ -256,6 +257,9 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 <div class="text-center">
                     <h1 class="text-5xl font-black tracking-tight okey-logo-text leading-tight">أوووكي</h1>
                     <p class="text-xs font-extrabold tracking-widest text-amber-200/90 mt-0.5">Okey Game</p>
+                </div>
+                <div class="text-center mt-2">
+                    <span id="fbStatusBadge" class="hidden text-[10px] font-extrabold text-gray-400 bg-app-card border border-app-border px-2.5 py-1 rounded-full inline-block"></span>
                 </div>
             </div>
 
@@ -1178,8 +1182,15 @@ Check your Browserslist config to be sure that your targets are set up correctly
         let fbReady = false;
         const fbPendingLocalWrites = {};
 
+        let fbCloudConnectedOnce = false;
+
         function initFirebaseSync() {
-            if (fbReady || typeof firebase === 'undefined') return;
+            if (fbReady) return;
+            if (typeof firebase === 'undefined') {
+                showToast('❌ لم تتمكّن مكتبة Firebase من التحميل (تحقّق من الإنترنت)');
+                updateFbStatusBadge('offline');
+                return;
+            }
             try {
                 const firebaseConfig = {
                     apiKey: "AIzaSyAFL0dwmltrBVh48wzdHeeLzd8NxqmQP9c",
@@ -1193,10 +1204,16 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 firebase.initializeApp(firebaseConfig);
                 fbDb = firebase.firestore();
                 fbReady = true;
+                updateFbStatusBadge('connecting');
 
                 Object.keys(FB_DOC_MAP).forEach(storageKey => {
                     const docId = FB_DOC_MAP[storageKey];
                     fbDb.collection('app_data').doc(docId).onSnapshot(snap => {
+                        if (!fbCloudConnectedOnce) {
+                            fbCloudConnectedOnce = true;
+                            updateFbStatusBadge('connected');
+                            showToast('✅ تم الاتصال بالسحابة المشتركة');
+                        }
                         if (!snap.exists) return;
                         const value = snap.data().value;
                         const asJson = JSON.stringify(value === undefined ? null : value);
@@ -1206,11 +1223,34 @@ Check your Browserslist config to be sure that your targets are set up correctly
                         }
                         applyRemoteData(storageKey, value);
                     }, err => {
+                        updateFbStatusBadge('error');
+                        showToast(`❌ خطأ اتصال (${docId}): ${err.code || ''} ${err.message || err}`);
                         console.error('Firestore sync error:', docId, err);
                     });
                 });
             } catch (e) {
+                updateFbStatusBadge('error');
+                showToast(`❌ خطأ تهيئة Firebase: ${e.message || e}`);
                 console.error('Firebase init error:', e);
+            }
+        }
+
+        function updateFbStatusBadge(status) {
+            const el = document.getElementById('fbStatusBadge');
+            if (!el) return;
+            el.classList.remove('hidden');
+            if (status === 'connected') {
+                el.textContent = '✅ متصل بالسحابة';
+                el.className = 'text-[10px] font-extrabold text-emerald-300 bg-emerald-950/50 border border-emerald-700/40 px-2.5 py-1 rounded-full inline-block';
+            } else if (status === 'connecting') {
+                el.textContent = '⏳ جارٍ الاتصال...';
+                el.className = 'text-[10px] font-extrabold text-gray-400 bg-app-card border border-app-border px-2.5 py-1 rounded-full inline-block';
+            } else if (status === 'offline') {
+                el.textContent = '⚠️ بدون سحابة (محلياً فقط)';
+                el.className = 'text-[10px] font-extrabold text-yellow-300 bg-yellow-950/40 border border-yellow-700/40 px-2.5 py-1 rounded-full inline-block';
+            } else {
+                el.textContent = '❌ خطأ اتصال بالسحابة';
+                el.className = 'text-[10px] font-extrabold text-app-red bg-red-950/40 border border-red-700/40 px-2.5 py-1 rounded-full inline-block';
             }
         }
 
@@ -1221,7 +1261,11 @@ Check your Browserslist config to be sure that your targets are set up correctly
             const value = data === undefined ? null : data;
             fbPendingLocalWrites[storageKey] = JSON.stringify(value);
             fbDb.collection('app_data').doc(docId).set({ value: value })
-                .catch(err => console.error('Firestore write error:', docId, err));
+                .catch(err => {
+                    updateFbStatusBadge('error');
+                    showToast(`❌ فشل الحفظ في السحابة (${docId}): ${err.code || ''} ${err.message || err}`);
+                    console.error('Firestore write error:', docId, err);
+                });
         }
 
         function applyRemoteData(storageKey, value) {
