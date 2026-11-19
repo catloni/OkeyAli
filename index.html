@@ -263,17 +263,12 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 </div>
             </div>
 
-            <div id="resumeMatchBanner" class="hidden mx-4 mt-5">
-                <button type="button" onclick="navigateTo('match')" class="w-full bg-emerald-950/80 border border-emerald-500/50 rounded-2xl p-3.5 flex items-center justify-between text-right shadow-md">
-                    <div class="flex items-center gap-3">
-                        <span class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span>
-                        <div>
-                            <div class="text-sm font-extrabold text-emerald-300">يوجد مباراة جارية حالياً</div>
-                            <div id="resumeMatchSubtitle" class="text-xs text-gray-300 mt-0.5">اضغط للمتابعة</div>
-                        </div>
-                    </div>
-                    <i data-lucide="chevron-left" class="w-5 h-5 text-emerald-400"></i>
-                </button>
+            <div id="ongoingMatchesSection" class="hidden mx-4 mt-5 space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-xs font-extrabold text-emerald-300">مباريات جارية حالياً</span>
+                    <span class="text-[10px] text-gray-500">اضغط مطوّلاً للحذف</span>
+                </div>
+                <div id="ongoingMatchesList" class="space-y-2.5"></div>
             </div>
 
             <div class="px-4 mt-6 space-y-3.5">
@@ -1062,7 +1057,8 @@ Check your Browserslist config to be sure that your targets are set up correctly
             TEAMS: 'okey_teams',
             HISTORY: 'okey_history',
             SETTINGS: 'okey_settings',
-            ACTIVE_MATCH: 'okey_active_match'
+            ACTIVE_MATCH: 'okey_active_match',
+            ACTIVE_MATCHES: 'okey_active_matches'
         };
         const DEFAULT_SETTINGS = {
             normalBonus: -20,
@@ -1087,6 +1083,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
         let matchHistory = [];
         let settings = { ...DEFAULT_SETTINGS };
         let activeMatch = null;
+        let activeMatches = [];
 
         let newMatchMode = 'team';
         let newMatchSlots = ['', '', '', ''];
@@ -1148,8 +1145,16 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 const s = localStorage.getItem(STORAGE_KEYS.SETTINGS);
                 settings = s ? { ...DEFAULT_SETTINGS, ...JSON.parse(s) } : { ...DEFAULT_SETTINGS };
 
-                const m = localStorage.getItem(STORAGE_KEYS.ACTIVE_MATCH);
-                activeMatch = m ? JSON.parse(m) : null;
+                const am = localStorage.getItem(STORAGE_KEYS.ACTIVE_MATCHES);
+                if (am) {
+                    activeMatches = JSON.parse(am);
+                } else {
+                    // ترقية من النظام القديم (مباراة واحدة فقط) إلى قائمة المباريات المتعددة
+                    const old = localStorage.getItem(STORAGE_KEYS.ACTIVE_MATCH);
+                    const oldMatch = old ? JSON.parse(old) : null;
+                    activeMatches = oldMatch ? [oldMatch] : [];
+                }
+                activeMatch = null;
             } catch (e) {
                 console.error('Error loading storage:', e);
             }
@@ -1176,7 +1181,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             [STORAGE_KEYS.TEAMS]: 'teams',
             [STORAGE_KEYS.HISTORY]: 'history',
             [STORAGE_KEYS.SETTINGS]: 'settings',
-            [STORAGE_KEYS.ACTIVE_MATCH]: 'activeMatch'
+            [STORAGE_KEYS.ACTIVE_MATCHES]: 'activeMatches'
         };
         let fbDb = null;
         let fbReady = false;
@@ -1219,7 +1224,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                                 : storageKey === STORAGE_KEYS.TEAMS ? savedTeams
                                 : storageKey === STORAGE_KEYS.HISTORY ? matchHistory
                                 : storageKey === STORAGE_KEYS.SETTINGS ? settings
-                                : activeMatch;
+                                : activeMatches;
                             if (localVal && (!Array.isArray(localVal) || localVal.length > 0)) {
                                 pushToFirestore(storageKey, localVal);
                             }
@@ -1309,9 +1314,14 @@ Check your Browserslist config to be sure that your targets are set up correctly
             } else if (storageKey === STORAGE_KEYS.SETTINGS) {
                 settings = { ...DEFAULT_SETTINGS, ...(value || {}) };
                 try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch (e) {}
-            } else if (storageKey === STORAGE_KEYS.ACTIVE_MATCH) {
-                activeMatch = value || null;
-                try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch (e) {}
+            } else if (storageKey === STORAGE_KEYS.ACTIVE_MATCHES) {
+                const r = mergeByKey(activeMatches, value, m => m.id);
+                activeMatches = r.merged;
+                try { localStorage.setItem(storageKey, JSON.stringify(activeMatches)); } catch (e) {}
+                if (r.addedFromLocal) pushToFirestore(STORAGE_KEYS.ACTIVE_MATCHES, activeMatches);
+                if (activeMatch) {
+                    activeMatch = activeMatches.find(m => m.id === activeMatch.id) || null;
+                }
             }
 
             refreshUIAfterRemoteUpdate();
@@ -1328,6 +1338,14 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 return;
             }
             navigateTo(currentScreen, true);
+        }
+
+        function saveActiveMatchEntry(match) {
+            if (!match) return;
+            const idx = activeMatches.findIndex(m => m.id === match.id);
+            if (idx === -1) activeMatches.push(match);
+            else activeMatches[idx] = match;
+            saveToStorage(STORAGE_KEYS.ACTIVE_MATCHES, activeMatches);
         }
 
         function getInitials(name) {
@@ -1425,16 +1443,55 @@ Check your Browserslist config to be sure that your targets are set up correctly
         });
 
         function updateHomeBannerState() {
-            const banner = document.getElementById('resumeMatchBanner');
-            if (activeMatch) {
-                banner.classList.remove('hidden');
-                const sub = activeMatch.mode === 'team'
-                    ? `${activeMatch.teamNames[0]} ضد ${activeMatch.teamNames[1]} • الجولة ${activeMatch.rounds.length + 1}`
-                    : `مباراة فردية • الجولة ${activeMatch.rounds.length + 1}`;
-                document.getElementById('resumeMatchSubtitle').textContent = sub;
-            } else {
-                banner.classList.add('hidden');
+            const section = document.getElementById('ongoingMatchesSection');
+            const list = document.getElementById('ongoingMatchesList');
+            if (!section || !list) return;
+            if (!activeMatches.length) {
+                section.classList.add('hidden');
+                list.innerHTML = '';
+                return;
             }
+            section.classList.remove('hidden');
+            list.innerHTML = activeMatches.map(m => {
+                const sub = m.mode === 'team'
+                    ? `${escapeHtml(m.teamNames[0])} ضد ${escapeHtml(m.teamNames[1])} • الجولة ${m.rounds.length + 1}`
+                    : `مباراة فردية • الجولة ${m.rounds.length + 1}`;
+                const names = m.players.map(p => p.name).join(' - ');
+                return `
+                    <button type="button"
+                        onclick="handleCardClick(() => openOngoingMatch('${m.id}'))"
+                        onpointerdown="startLongPress(() => confirmDeleteOngoingMatch('${m.id}'))"
+                        onpointerup="cancelLongPress()" onpointerleave="cancelLongPress()"
+                        class="w-full bg-emerald-950/80 border border-emerald-500/50 rounded-2xl p-3.5 flex items-center justify-between text-right shadow-md select-none">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-3 h-3 shrink-0 rounded-full bg-emerald-400 animate-ping"></span>
+                            <div class="min-w-0">
+                                <div class="text-sm font-extrabold text-emerald-300 truncate">${escapeHtml(names)}</div>
+                                <div class="text-xs text-gray-300 mt-0.5 truncate">${sub}</div>
+                            </div>
+                        </div>
+                        <i data-lucide="chevron-left" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+                    </button>`;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function openOngoingMatch(matchId) {
+            const m = activeMatches.find(x => x.id === matchId);
+            if (!m) return;
+            activeMatch = m;
+            navigateTo('match');
+        }
+
+        function confirmDeleteOngoingMatch(matchId) {
+            openConfirmDialog('حذف المباراة الجارية', 'سيتم حذف هذه المباراة نهائياً دون حفظها في السجل. هل أنت متأكد؟', () => {
+                activeMatches = activeMatches.filter(x => x.id !== matchId);
+                saveToStorage(STORAGE_KEYS.ACTIVE_MATCHES, activeMatches);
+                if (activeMatch && activeMatch.id === matchId) activeMatch = null;
+                if (currentScreen === 'match' && !activeMatch) navigateTo('home');
+                else updateHomeBannerState();
+                showToast('تم حذف المباراة الجارية');
+            });
         }
 
         function openNewMatchScreen() {
@@ -1609,7 +1666,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 rounds: []
             };
 
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             navigateTo('match');
         }
 
@@ -1721,7 +1778,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             const now = Date.now();
             activeMatch.roundStartTime = now;
             if (!activeMatch.startTime) activeMatch.startTime = now;
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             playUiTone(560, 0.06);
             renderActiveMatchScreen();
             startTimers();
@@ -1789,7 +1846,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 showToast(`خصم ${settings.revealedBonus} لكشف الرقم المشابه: ${activeMatch.players[idx].name}`);
                 playRevealSound();
             }
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             renderActiveMatchScreen();
         }
 
@@ -1808,7 +1865,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
         function confirmRaffleWinner() {
             activeMatch.dealerIndex = pendingRaffleDealerIdx;
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             closeModal('raffleModal');
             renderActiveMatchScreen();
             showToast(`تم اعتماد ${activeMatch.players[pendingRaffleDealerIdx].name} كموزّع`);
@@ -1832,7 +1889,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
         function selectManualDealer(idx) {
             activeMatch.dealerIndex = idx;
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             closeModal('manualDealerModal');
             renderActiveMatchScreen();
         }
@@ -2544,7 +2601,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 // إعادة الجولة: لا تُحتسب جولة ولا نقاط، فقط يبدأ توزيع جديد
                 activeMatch.revealedPlayerIndex = null;
                 activeMatch.roundStartTime = null;
-                saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+                saveActiveMatchEntry(activeMatch);
                 playUiTone(380, 0.08);
                 navigateTo('match');
                 showToast('أُعيدت الجولة ولم تُحتسب نقاط، اضغط «بدء الجولة» عند التوزيع');
@@ -2643,7 +2700,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 };
                 roundState.editingIndex = null;
                 roundState.editRevealedIndex = null;
-                saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+                saveActiveMatchEntry(activeMatch);
                 playUiTone(520, 0.08);
                 navigateTo('match');
                 showToast(`تم تحديث الجولة ${idx + 1}`);
@@ -2680,7 +2737,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             activeMatch.revealedPlayerIndex = null;
             activeMatch.roundStartTime = null;
 
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+            saveActiveMatchEntry(activeMatch);
             playUiTone(520, 0.08);
             navigateTo('match');
             setTimeout(() => announceScores(false), 600);
@@ -2739,8 +2796,10 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 saveToStorage(STORAGE_KEYS.HISTORY, matchHistory);
             }
 
+            const finishedId = activeMatch.id;
             activeMatch = null;
-            clearStorage(STORAGE_KEYS.ACTIVE_MATCH);
+            activeMatches = activeMatches.filter(m => m.id !== finishedId);
+            saveToStorage(STORAGE_KEYS.ACTIVE_MATCHES, activeMatches);
             stopTimers();
 
             if (finishedRecord.rounds.length > 0) {
@@ -2759,7 +2818,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 `هل تريد حذف الجولة رقم ${activeMatch.rounds.length}؟`,
                 () => {
                     activeMatch.rounds.pop();
-                    saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
+                    saveActiveMatchEntry(activeMatch);
                     renderActiveMatchScreen();
                     showToast('تم حذف الجولة');
                 }
@@ -2926,7 +2985,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 
         function getHistoryEntries() {
             const entries = [];
-            if (activeMatch) entries.push({ kind: 'active', record: activeMatch });
+            activeMatches.forEach(am => entries.push({ kind: 'active', record: am }));
             matchHistory.forEach((m, idx) => entries.push({ kind: 'history', idx: idx, record: m }));
             return entries;
         }
@@ -3014,7 +3073,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                     : `<span>${m.dateText || ''}</span>`;
 
                 const clickAttr = isActive
-                    ? `onclick="handleCardClick(() => { renderActiveMatchScreen(); navigateTo('match'); })"`
+                    ? `onclick="handleCardClick(() => openOngoingMatch('${m.id}'))"`
                     : `onclick="handleCardClick(() => openMatchDetails(${entry.idx}))" onpointerdown="startLongPress(() => confirmDeleteHistoryMatch(${entry.idx}))" onpointerup="cancelLongPress()" onpointerleave="cancelLongPress()"`;
 
                 return `
@@ -3247,11 +3306,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
         function rematchFromHistory(idx) {
             const m = matchHistory[idx];
             if (!m) return;
-            if (activeMatch) {
-                openConfirmDialog('يوجد مباراة جارية', 'لديك مباراة جارية حالياً. المتابعة ستستبدلها بمباراة جديدة بنفس اللاعبين. هل تريد المتابعة؟', () => startRematch(m));
-            } else {
-                startRematch(m);
-            }
+            startRematch(m);
         }
 
         function startRematch(m) {
@@ -3266,9 +3321,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 revealedPlayerIndex: null,
                 rounds: []
             };
-            saveToStorage(STORAGE_KEYS.ACTIVE_MATCH, activeMatch);
-            stopTimers();
-            renderActiveMatchScreen();
+            saveActiveMatchEntry(activeMatch);
             navigateTo('match');
             showToast('بدأت مباراة جديدة بنفس اللاعبين');
         }
@@ -4066,6 +4119,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 matchHistory = [];
                 settings = { ...DEFAULT_SETTINGS };
                 activeMatch = null;
+                activeMatches = [];
                 closeModal('settingsModal');
                 stopTimers();
                 navigateTo('home');
